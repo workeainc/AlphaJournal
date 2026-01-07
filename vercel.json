@@ -1,5 +1,6 @@
 {
     "buildCommand": "npx turbo run build",
+    "installCommand": "npm install --force",
     "outputDirectory": "apps/web/.next",
     "framework": "nextjs"
 }
