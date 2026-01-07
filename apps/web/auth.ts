@@ -6,7 +6,7 @@ import Google from "next-auth/providers/google";
 import Credentials from "next-auth/providers/credentials";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-    adapter: PrismaAdapter(prisma),
+    adapter: PrismaAdapter(prisma) as any,
     providers: [
         GitHub,
         Google,
@@ -46,11 +46,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         strategy: "jwt",
     },
     callbacks: {
-        async session({ session, token }) {
+        async session({ session, token }: any) {
             if (token.sub && session.user) {
                 session.user.id = token.sub;
             }
             return session;
         },
     },
-});
+}) as any;
