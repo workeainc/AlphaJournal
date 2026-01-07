@@ -1,5 +1,5 @@
 {
-    "buildCommand": "npx prisma generate --schema=packages/database/prisma/schema.prisma && cd apps/web && npx next build",
+    "buildCommand": "npx turbo build --filter=web",
     "installCommand": "npm install --legacy-peer-deps",
     "outputDirectory": "apps/web/.next",
     "framework": "nextjs"
