@@ -25,13 +25,18 @@ async function main() {
 
     try {
         for (const statement of statements) {
-            console.log("Executing statement...");
-            // console.log(statement.substring(0, 50) + "..."); 
-            await client.execute(statement);
+            console.log(`Executing statement: ${statement.substring(0, 40)}...`);
+            try {
+                await client.execute(statement);
+            } catch (err: any) {
+                if (err.message.includes("already exists")) {
+                    console.log("  - Table/Index already exists, skipping.");
+                } else {
+                    console.error("  - Failed to execute statement:", err.message);
+                }
+            }
         }
-        console.log("Migration completed successfully!");
-    } catch (e: any) {
-        console.error("Migration failed:", e);
+        console.log("Migration finished (checked all statements).");
     } finally {
         client.close();
     }
