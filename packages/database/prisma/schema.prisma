@@ -16,7 +16,7 @@ model User {
   image         String?
   
   // NextAuth
-  accounts      NextAuthAccount[]
+  accounts      Account[]
   sessions      Session[]
   
   // Trading Profile
@@ -29,7 +29,7 @@ model User {
   updatedAt       DateTime  @updatedAt
 }
 
-model NextAuthAccount {
+model Account {
   id                 String  @id @default(uuid())
   userId             String
   type               String
