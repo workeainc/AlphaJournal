@@ -105,7 +105,7 @@ export function EquityChart({ data, benchmarkData = [] }: EquityChartProps) {
                             color: "#f8fafc"
                         }}
                         itemStyle={{ color: "#3b82f6" }}
-                        formatter={(value: any, name: string) => [
+                        formatter={(value: any, name: string | undefined) => [
                             `$${value.toLocaleString()}`,
                             name === "balance" ? "Portfolio" : "BTC Benchmark"
                         ]}
