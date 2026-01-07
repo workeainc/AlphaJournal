@@ -1,0 +1,169 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            String    @id @default(uuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  
+  // NextAuth
+  accounts      NextAuthAccount[]
+  sessions      Session[]
+  
+  // Trading Profile
+  initialBalance  Float    @default(10000)
+  currency        String   @default("USDT")
+  riskTolerance   Float    @default(2.0) // Max risk % per trade
+  
+  tradingAccounts TradingAccount[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model NextAuthAccount {
+  id                 String  @id @default(uuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String?
+  access_token       String?
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model TradingAccount {
+  id        String   @id @default(uuid())
+  name      String // e.g., "Personal", "Challenge"
+  balance   Float
+  currency  String   @default("USDT")
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  trades    Trade[]
+  snapshots BalanceSnapshot[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model BalanceSnapshot {
+  id        String   @id @default(uuid())
+  accountId String
+  account   TradingAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  balance   Float
+  pnl       Float?   // PnL that triggered this snapshot (if any)
+  timestamp DateTime @default(now())
+}
+
+model PreTradeChecklist {
+  id          String   @id @default(uuid())
+  name        String   // "Standard", "Scalping", "Swing"
+  description String?
+  items       ChecklistItem[]
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model ChecklistItem {
+  id          String   @id @default(uuid())
+  checklistId String
+  checklist   PreTradeChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  
+  label       String   // "Technical Trigger"
+  description String?  // "Did price close above the Key Level?"
+  type        String   // "YES_NO", "MULTIPLE_CHOICE", "TEXT"
+  weight      Int      @default(20) // For quality score (0-100)
+  order       Int      // Display order
+  required    Boolean  @default(true)
+  options     String?  // JSON array for MULTIPLE_CHOICE
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model TradeChecklistResponse {
+  id        String   @id @default(uuid())
+  tradeId   String   @unique
+  trade     Trade    @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+  
+  responses String   // JSON: { "itemId": "YES", "itemId2": "NO" }
+  score     Int      // 0-100 quality score
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Trade {
+  id          String  @id @default(uuid())
+  accountId   String
+  account     TradingAccount @relation(fields: [accountId], references: [id])
+  tags        Tag[]
+
+  // Setup Details
+  symbol      String
+  direction   String // LONG, SHORT
+  entryPrice  Float
+  stopLoss    Float
+  targetPrice Float?
+  plannedRR   Float?
+  quantity    Float
+  riskAmount  Float // The $ amount risked (1R)
+
+  // Management
+  status    String @default("OPEN") // OPEN, CLOSED, PENDING
+  exitPrice Float?
+  pnl       Float? // Realized PnL
+
+  // Discipline & Journal (Enhanced)
+  checklistResponse TradeChecklistResponse?
+  checklistScore    Int?    // Denormalized for quick access
+  mood              String? // Tilt/Emotional state: CALM, TIRED, ANGRY, etc.
+  notes             String?
+  
+  // Screenshot/Chart
+  chartImageUrl   String?
+  tradingViewLink String?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Tag {
+  id     String  @id @default(uuid())
+  name   String  @unique
+  color  String?
+  trades Trade[]
+}
+
