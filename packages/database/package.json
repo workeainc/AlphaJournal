@@ -14,16 +14,16 @@
         "clean": "rm -rf .turbo node_modules"
     },
     "dependencies": {
-        "@libsql/client": "^0.17.0",
-        "@prisma/adapter-libsql": "^7.2.0",
-        "@prisma/client": "^6.2.1"
+        "@libsql/client": "0.17.0",
+        "@prisma/adapter-libsql": "5.22.0",
+        "@prisma/client": "5.22.0"
     },
     "devDependencies": {
         "@repo/eslint-config": "*",
         "@repo/typescript-config": "*",
         "@types/node": "^22.10.6",
         "eslint": "^9.18.0",
-        "prisma": "^6.2.1",
+        "prisma": "5.22.0",
         "tsx": "^4.19.2",
         "typescript": "5.7.3"
     }
