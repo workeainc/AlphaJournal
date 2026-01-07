@@ -11,6 +11,7 @@
         "db:push": "prisma db push",
         "db:studio": "prisma studio",
         "db:seed": "tsx prisma/seed.ts",
+        "db:seed:production": "tsx src/seed-production.ts",
         "clean": "rm -rf .turbo node_modules"
     },
     "dependencies": {
