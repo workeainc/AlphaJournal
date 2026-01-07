@@ -4,6 +4,7 @@ import { prisma } from "@repo/database";
 import { calculateQualityScore, validateChecklistComplete, type ChecklistResponse } from "@repo/core";
 import { getDefaultAccount } from "./user";
 import { getDefaultChecklist } from "./checklist";
+import { revalidatePath } from "next/cache";
 
 export interface CreateTradeInput {
     symbol: string;
@@ -221,4 +222,97 @@ export async function closeTrade(id: string, exitPrice: number) {
 
         return updatedTrade;
     });
+}
+
+/**
+ * Delete a single trade and revert its impact on account balance
+ */
+export async function deleteTrade(id: string) {
+    const trade = await prisma.trade.findUnique({
+        where: { id },
+        include: { account: true }
+    });
+
+    if (!trade) throw new Error("Trade not found");
+
+    await prisma.$transaction(async (tx: any) => {
+        // 1. Revert balance impact
+        if (trade.status === "OPEN") {
+            // Revert the initial risk deduction
+            await tx.tradingAccount.update({
+                where: { id: trade.accountId },
+                data: {
+                    balance: {
+                        increment: trade.riskAmount,
+                    },
+                },
+            });
+        } else if (trade.status === "CLOSED") {
+            // Revert the PnL and risk amount return
+            const impact = (trade.pnl || 0) + trade.riskAmount;
+            await tx.tradingAccount.update({
+                where: { id: trade.accountId },
+                data: {
+                    balance: {
+                        decrement: impact,
+                    },
+                },
+            });
+        }
+
+        // 2. Delete the trade (related records will Cascade delete)
+        await tx.trade.delete({
+            where: { id }
+        });
+    });
+
+    revalidatePath("/journal");
+    revalidatePath("/portfolio");
+    return { success: true };
+}
+
+/**
+ * Bulk delete trades
+ */
+export async function deleteTrades(ids: string[]) {
+    // Process one by one to ensure balance logic is correct for each
+    for (const id of ids) {
+        await deleteTrade(id);
+    }
+    return { success: true };
+}
+
+/**
+ * Update trade details
+ */
+export async function updateTrade(id: string, data: Partial<CreateTradeInput>) {
+    const trade = await prisma.trade.findUnique({
+        where: { id },
+    });
+
+    if (!trade) throw new Error("Trade not found");
+
+    const updatedTrade = await prisma.trade.update({
+        where: { id },
+        data: {
+            notes: data.notes,
+            mood: data.mood,
+            tradingViewLink: data.tradingViewLink,
+            symbol: data.symbol?.toUpperCase(),
+            // Only update tags if provided
+            ...(data.tags && {
+                tags: {
+                    set: [], // Clear existing tags
+                    connectOrCreate: data.tags.map(name => ({
+                        where: { name: name.toUpperCase() },
+                        create: { name: name.toUpperCase() }
+                    }))
+                }
+            })
+        },
+    });
+
+    revalidatePath("/journal");
+    revalidatePath(`/journal/${id}`);
+    return updatedTrade;
 }
