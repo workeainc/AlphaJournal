@@ -185,6 +185,20 @@ export function JournalTable({ initialTrades }: JournalTableProps) {
                                                         </span>
                                                     ))}
                                                 </div>
+                                                {/* Targets Display (Phase 7) */}
+                                                {trade.targets && trade.targets.length > 0 && (
+                                                    <div className="flex flex-wrap gap-1 mt-1">
+                                                        {trade.targets.map((t: any, i: number) => (
+                                                            <span
+                                                                key={t.id}
+                                                                className="text-[9px] font-mono text-emerald-400 bg-emerald-500/5 border border-emerald-500/10 px-1.5 py-0.5 rounded"
+                                                                title={`${t.percentage}% Quantity`}
+                                                            >
+                                                                TP{i + 1} ${t.price}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">

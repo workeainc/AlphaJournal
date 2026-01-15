@@ -142,6 +142,9 @@ model Trade {
   quantity    Float
   riskAmount  Float // The $ amount risked (1R)
 
+  // Targets (New Phase 7)
+  targets     TradeTarget[]
+
   // Management
   status    String @default("OPEN") // OPEN, CLOSED, PENDING
   exitPrice Float?
@@ -166,5 +169,17 @@ model Tag {
   name   String  @unique
   color  String?
   trades Trade[]
+}
+
+model TradeTarget {
+  id         String   @id @default(uuid())
+  tradeId    String
+  trade      Trade    @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+  price      Float
+  percentage Float    // e.g. 50%
+  isHit      Boolean  @default(false) // For Portfolio tracking
+  
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 

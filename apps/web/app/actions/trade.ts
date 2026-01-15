@@ -12,6 +12,7 @@ export interface CreateTradeInput {
     entryPrice: number;
     stopLoss: number;
     targetPrice?: number;
+    targets?: { price: number; percentage: number }[];
     quantity: number;
     riskAmount: number;
     checklistResponses: ChecklistResponse[];
@@ -65,17 +66,33 @@ export async function createTrade(input: CreateTradeInput) {
         }))
     );
 
-    // 5. Calculate Planned RR
+    // 5. Calculate Planned RR (Based on TARGETS or single targetPrice)
     let plannedRR: number | undefined = undefined;
-    if (input.targetPrice) {
-        const risk = Math.abs(input.entryPrice - input.stopLoss);
-        const reward = Math.abs(input.targetPrice - input.entryPrice);
-        if (risk > 0) {
+    const risk = Math.abs(input.entryPrice - input.stopLoss);
+
+    if (risk > 0) {
+        // If we have multiple targets, calculate weighted RR
+        if (input.targets && input.targets.length > 0) {
+            let totalWeightedRR = 0;
+            let totalPercent = 0;
+            for (const t of input.targets) {
+                const reward = Math.abs(t.price - input.entryPrice);
+                const rMultiple = reward / risk;
+                totalWeightedRR += rMultiple * (t.percentage / 100);
+                totalPercent += t.percentage;
+            }
+            if (totalPercent > 0) {
+                plannedRR = totalWeightedRR;
+            }
+        }
+        // Fallback to single target calculation if no array
+        else if (input.targetPrice) {
+            const reward = Math.abs(input.targetPrice - input.entryPrice);
             plannedRR = reward / risk;
         }
     }
 
-    // 6. Create trade and checklist response in a transaction
+    // 6. Create trade and related records in a transaction
     const trade = await prisma.$transaction(async (tx: any) => {
         // Create the trade
         const newTrade = await tx.trade.create({
@@ -85,7 +102,7 @@ export async function createTrade(input: CreateTradeInput) {
                 direction: input.direction,
                 entryPrice: input.entryPrice,
                 stopLoss: input.stopLoss,
-                targetPrice: input.targetPrice,
+                targetPrice: input.targetPrice, // Keep for legacy/first target ref
                 plannedRR: plannedRR,
                 quantity: input.quantity,
                 riskAmount: input.riskAmount,
@@ -98,6 +115,13 @@ export async function createTrade(input: CreateTradeInput) {
                     connectOrCreate: input.tags?.map(name => ({
                         where: { name: name.toUpperCase() },
                         create: { name: name.toUpperCase() }
+                    }))
+                },
+                // Create targets inline
+                targets: {
+                    create: input.targets?.map(t => ({
+                        price: t.price,
+                        percentage: t.percentage
                     }))
                 }
             },
@@ -149,6 +173,7 @@ export async function getTrades() {
         include: {
             checklistResponse: true,
             tags: true,
+            targets: true,
         },
         orderBy: { createdAt: "desc" },
     });

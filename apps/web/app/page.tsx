@@ -292,7 +292,7 @@ export default function Home() {
                             className="flex-1 bg-slate-950 border border-slate-800 rounded py-1 px-2 text-xs font-mono text-emerald-300 focus:border-emerald-500/50 outline-none"
                             placeholder="Price"
                           />
-                          <div className="relative w-16">
+                          <div className="relative w-20 shrink-0">
                             <input
                               type="number"
                               value={t.percentage || ""}
@@ -302,7 +302,7 @@ export default function Home() {
                             />
                             <span className="absolute right-1 top-1 text-[10px] text-slate-500">%</span>
                           </div>
-                          <div className="w-12 text-right">
+                          <div className="w-12 text-right shrink-0">
                             <span className="text-[10px] font-mono text-emerald-500 font-bold">
                               {rMult > 0 ? `+${rMult.toFixed(1)}R` : '-'}
                             </span>
