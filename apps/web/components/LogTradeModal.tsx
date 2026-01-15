@@ -14,6 +14,7 @@ interface LogTradeModalProps {
     stopLoss: number;
     targetPrice?: number;
     checklistItems: ChecklistItem[];
+    targets?: Array<{ id: string; price: number; percentage: number }>;
 }
 
 export function LogTradeModal({
@@ -24,6 +25,7 @@ export function LogTradeModal({
     stopLoss,
     targetPrice,
     checklistItems,
+    targets = [],
 }: LogTradeModalProps) {
     const [symbol, setSymbol] = useState("");
     const [notes, setNotes] = useState("");
@@ -42,7 +44,6 @@ export function LogTradeModal({
     useEffect(() => {
         if (isOpen) {
             setSymbol("");
-            setNotes("");
             setTradingViewLink("");
             setTags([]);
             setTagInput("");
@@ -50,8 +51,18 @@ export function LogTradeModal({
             setChecklistResponses([]);
             setQualityScore(null);
             setIsSuccess(false);
+
+            // Pre-fill notes with TP breakdown if targets exist
+            if (targets.length > 0) {
+                const tpNotes = targets.map((t, i) =>
+                    `TP${i + 1}: ${t.price} (${t.percentage}%)`
+                ).join('\n');
+                setNotes(`Start Plan:\n${tpNotes}\n\n`);
+            } else {
+                setNotes("");
+            }
         }
-    }, [isOpen]);
+    }, [isOpen, targets]);
 
     const MOODS = [
         { id: "CALM", label: "Calm", emoji: "🧘" },

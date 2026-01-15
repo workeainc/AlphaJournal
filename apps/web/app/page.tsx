@@ -3,10 +3,16 @@
 import { useState, useEffect } from "react";
 import { useSession, signIn } from "next-auth/react";
 import { calculateRisk, type TradeCalculation, type ChecklistItem } from "@repo/core";
-import { Calculator, ShieldCheck, DollarSign, TrendingUp, AlertTriangle, BookOpen } from "lucide-react";
+import { Calculator, ShieldCheck, DollarSign, TrendingUp, AlertTriangle, BookOpen, Plus, Trash2 } from "lucide-react";
 import { LogTradeModal } from "../components/LogTradeModal";
 import { getDefaultChecklist } from "./actions/checklist";
 import { getCurrentUser } from "./actions/user";
+
+interface Target {
+  id: string;
+  price: number;
+  percentage: number; // 0-100
+}
 
 export default function Home() {
   const { data: session, status } = useSession();
@@ -16,7 +22,9 @@ export default function Home() {
   const [riskPercent, setRiskPercent] = useState<number>(2);
   const [entry, setEntry] = useState<number>(0);
   const [stopLoss, setStopLoss] = useState<number>(0);
-  const [target, setTarget] = useState<number>(0); // Optional
+
+  // Multi-Target State
+  const [targets, setTargets] = useState<Target[]>([]);
 
   const [result, setResult] = useState<TradeCalculation | null>(null);
 
@@ -37,18 +45,76 @@ export default function Home() {
   // --- Effect: Auto Calculate on Input Change ---
   useEffect(() => {
     if (balance > 0 && entry > 0 && stopLoss > 0) {
+      // Basic calculation
       const calc = calculateRisk({
         accountBalance: balance,
         riskPercentage: riskPercent,
         entryPrice: entry,
         stopLossPrice: stopLoss,
-        targetPrice: target > 0 ? target : undefined,
+        targetPrice: targets.length === 1 ? targets[0].price : undefined, // Legacy support for 1 TP
       });
+
+      // augment with weighted R:R if multiple targets
+      if (targets.length > 0 && calc.isValid) {
+        const riskDist = Math.abs(entry - stopLoss);
+        if (riskDist > 0) {
+          let totalWeightedR = 0;
+          let totalPercent = 0;
+
+          targets.forEach(t => {
+            const rewardDist = Math.abs(t.price - entry);
+            const rMultiple = rewardDist / riskDist;
+            totalWeightedR += rMultiple * (t.percentage / 100);
+            totalPercent += t.percentage;
+          });
+
+          // If targets don't sum to 100%, assume remainder is closed at 0 or held? 
+          // For R:R display, we usually want "Potential R:R" if all TPs hit.
+          // Let's normalize to the covered percentage for display/planning.
+          if (totalPercent > 0) {
+            calc.rewardToRisk = totalWeightedR; // Show weighted average
+          }
+        }
+      }
+
       setResult(calc);
     } else {
       setResult(null);
     }
-  }, [balance, riskPercent, entry, stopLoss, target]);
+  }, [balance, riskPercent, entry, stopLoss, targets]);
+
+  // Multi-Target Handlers
+  const addTarget = () => {
+    const newId = Math.random().toString(36).substr(2, 9);
+    // Auto-calculate next target price (e.g., +2R)
+    let nextPrice = 0;
+    if (entry > 0 && stopLoss > 0) {
+      const risk = Math.abs(entry - stopLoss);
+      const direction = entry > stopLoss ? 1 : -1;
+      // If no targets, set 2R. If existing, add another 1R to the last one
+      if (targets.length === 0) {
+        nextPrice = entry + (risk * 2 * direction);
+      } else {
+        const last = targets[targets.length - 1];
+        nextPrice = last.price + (risk * direction);
+      }
+    }
+
+    // Auto-distribute percentage
+    const currentTotal = targets.reduce((sum, t) => sum + t.percentage, 0);
+    const remaining = Math.max(0, 100 - currentTotal);
+
+    setTargets([...targets, { id: newId, price: nextPrice || 0, percentage: remaining }]);
+  };
+
+  const removeTarget = (id: string) => {
+    setTargets(targets.filter(t => t.id !== id));
+  };
+
+  const updateTarget = (id: string, field: 'price' | 'percentage', value: number) => {
+    setTargets(targets.map(t => t.id === id ? { ...t, [field]: value } : t));
+  };
+
 
   // Load checklist items when modal opens
   const handleOpenModal = async () => {
@@ -122,12 +188,25 @@ export default function Home() {
                 {/* Risk % */}
                 <div>
                   <label className="block text-xs font-medium text-slate-400 mb-1">Risk per Trade (%)</label>
+                  <div className="flex items-center gap-2 mb-3">
+                    <input
+                      type="number"
+                      min="0.01"
+                      max="100"
+                      step="0.01"
+                      value={riskPercent}
+                      onChange={(e) => setRiskPercent(parseFloat(e.target.value) || 0)}
+                      className="w-24 bg-slate-950 border border-slate-800 rounded-lg py-1 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 font-mono text-center font-bold text-white"
+                    />
+                    <span className="text-slate-500">%</span>
+                  </div>
+
                   <div className="flex space-x-2">
                     {[0.5, 1, 2, 5].map((p) => (
                       <button
                         key={p}
                         onClick={() => setRiskPercent(p)}
-                        className={`flex-1 py-1 text-sm rounded-md border transition-all ${riskPercent === p
+                        className={`flex-1 py-1 text-xs rounded-md border transition-all ${riskPercent === p
                           ? "bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/50"
                           : "bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-600"
                           }`}
@@ -137,8 +216,8 @@ export default function Home() {
                     ))}
                   </div>
                   <input
-                    type="range" min="0.1" max="10" step="0.1"
-                    value={riskPercent}
+                    type="range" min="0.1" max="5" step="0.1"
+                    value={riskPercent > 5 ? 5 : riskPercent}
                     onChange={(e) => setRiskPercent(parseFloat(e.target.value))}
                     className="w-full mt-3 accent-blue-500 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer"
                   />
@@ -179,15 +258,77 @@ export default function Home() {
                   </div>
                 </div>
 
+                {/* Multi-Target Section */}
                 <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1">Target Price (Optional)</label>
-                  <input
-                    type="number"
-                    placeholder="0.00"
-                    value={target || ""}
-                    onChange={(e) => setTarget(parseFloat(e.target.value))}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono text-emerald-200"
-                  />
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-xs font-medium text-slate-400">Take Profit Targets</label>
+                    <button onClick={addTarget} className="text-xs flex items-center gap-1 text-blue-400 hover:text-blue-300 font-bold">
+                      <Plus className="w-3 h-3" /> Add TP
+                    </button>
+                  </div>
+
+                  <div className="space-y-2">
+                    {targets.length === 0 && (
+                      <div className="text-xs text-slate-600 italic text-center py-2 border border-slate-800 border-dashed rounded">
+                        No targets set. Open-ended trade.
+                      </div>
+                    )}
+                    {targets.map((t, i) => {
+                      // Dynamic R Calc
+                      let rMult = 0;
+                      if (entry > 0 && stopLoss > 0 && t.price > 0) {
+                        const risk = Math.abs(entry - stopLoss);
+                        const reward = Math.abs(t.price - entry);
+                        if (risk > 0) rMult = reward / risk;
+                      }
+
+                      return (
+                        <div key={t.id} className="flex items-center gap-2 animate-in slide-in-from-left-2 fade-in duration-200">
+                          <span className="text-xs font-mono text-slate-500 w-6">TP{i + 1}</span>
+                          <input
+                            type="number"
+                            value={t.price || ""}
+                            onChange={(e) => updateTarget(t.id, 'price', parseFloat(e.target.value))}
+                            className="flex-1 bg-slate-950 border border-slate-800 rounded py-1 px-2 text-xs font-mono text-emerald-300 focus:border-emerald-500/50 outline-none"
+                            placeholder="Price"
+                          />
+                          <div className="relative w-16">
+                            <input
+                              type="number"
+                              value={t.percentage || ""}
+                              onChange={(e) => updateTarget(t.id, 'percentage', parseFloat(e.target.value))}
+                              className="w-full bg-slate-950 border border-slate-800 rounded py-1 px-2 text-xs font-mono text-white focus:border-blue-500/50 outline-none text-right pr-4"
+                              placeholder="%"
+                            />
+                            <span className="absolute right-1 top-1 text-[10px] text-slate-500">%</span>
+                          </div>
+                          <div className="w-12 text-right">
+                            <span className="text-[10px] font-mono text-emerald-500 font-bold">
+                              {rMult > 0 ? `+${rMult.toFixed(1)}R` : '-'}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => removeTarget(t.id)}
+                            className="text-slate-600 hover:text-red-400"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {/* Total Sizing Check */}
+                  {targets.length > 0 && (
+                    <div className="mt-2 text-right text-[10px]">
+                      <span className={
+                        targets.reduce((s, t) => s + t.percentage, 0) === 100
+                          ? "text-emerald-500"
+                          : "text-orange-400"
+                      }>
+                        Total Exit: {targets.reduce((s, t) => s + t.percentage, 0)}%
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -250,7 +391,9 @@ export default function Home() {
                 {result.rewardToRisk && (
                   <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl flex items-center justify-between">
                     <div>
-                      <p className="text-slate-500 text-xs uppercase font-bold mb-1">Reward to Risk</p>
+                      <p className="text-slate-500 text-xs uppercase font-bold mb-1">
+                        {targets.length > 1 ? "Weighted R:R" : "Reward to Risk"}
+                      </p>
                       <div className="flex items-baseline space-x-2">
                         <span className="text-3xl font-mono text-emerald-400 font-bold">
                           {result.rewardToRisk.toFixed(2)}R
@@ -293,7 +436,10 @@ export default function Home() {
           calculation={result}
           entryPrice={entry}
           stopLoss={stopLoss}
-          targetPrice={target > 0 ? target : undefined}
+          // Pass the FIRST target as "targetPrice" for database compatibility (Phase 1)
+          targetPrice={targets.length > 0 ? targets[0].price : undefined}
+          // Pass full targets array via special prop (requires Modal update)
+          targets={targets}
           checklistItems={checklistItems}
         />
       )}
